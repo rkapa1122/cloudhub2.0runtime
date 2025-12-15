@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="700ef303-96c7-4608-ba3d-2057553de56f" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<flow name="ch2runtimeupdateFlow" doc:id="0c50bb04-3548-49b1-bcd5-9852689f02ae" >
+		<http:listener doc:name="Listener" doc:id="560f98e2-588a-417e-af2f-1d7181e66fff" config-ref="HTTP_Listener_config" path="/tuntime"/>
+		<ee:transform doc:name="Transform Message" doc:id="5c99679f-17eb-452c-abe1-8286e0102f36" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	
+	status: "Helloooooooooo"
+	
+	}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="ad51fcc1-e50b-4281-bcc9-06341066eee3" message="#[payload]"/>
+	</flow>
+</mule>
