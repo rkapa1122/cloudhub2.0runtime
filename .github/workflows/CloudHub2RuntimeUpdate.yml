@@ -25,18 +25,7 @@ jobs:
               "client_secret": "0C25F7CE451D4954986D8a532D71292F"
             }' | jq -r '.access_token')
 
-           BODY=$(echo "$RESPONSE" | head -n 1)
-          STATUS=$(echo "$RESPONSE" | tail -n 1)
-
-          echo "GET Deployment HTTP Status: $STATUS"
-
-          if [ "$STATUS" != "200" ]; then
-          echo "ERROR: Deployment fetch failed"
-          echo "$BODY"
-          exit 1
-          fi
-
-          echo "$BODY" > deployment.json
+         
 
       - name: Get Existing Deployment and Show Current Runtime
         run: |
