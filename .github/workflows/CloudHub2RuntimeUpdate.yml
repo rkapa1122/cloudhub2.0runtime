@@ -1,18 +1,33 @@
-name: Update Mule Runtime on CloudHub 2.0 (Hardcoded)
+name: Update Mule Runtime on CloudHub 2.0 (Hardcoded Values)
 
 on:
+  # Allows manual running from the GitHub Actions UI
   workflow_dispatch:
     inputs:
       runtimeImage:
-        description: "Mule runtime image (e.g. mulesoft/mule-runtime:4.6.2)"
+        description: "Mule runtime image (e.g. 4.6.2)"
         required: true
+      # The appName input is still used here just to avoid changing the token retrieval step,
+      # but all other values are baked in.
       appName:
-        description: "runtimeautomation"
+        description: "Application Name (e.g. runtimeautomation)"
         required: true
+        default: "runtimeautomation" # Example Default
 
 jobs:
   update-runtime:
     runs-on: ubuntu-latest
+
+    env:
+      # Hardcoded Values for CloudHub 2.0 Application and Environment
+      APP_NAME: "runtimeautomation"
+      ORG_ID: "438cc9b1-154d-4ca6-864a-4c41c21f3458"
+      ENV_ID: "7e607371-34c6-42e9-9e61-3344ed6d1186"
+      CLIENT_ID: "f6e58674681a44569abb7b1af1011a9f"
+      CLIENT_SECRET: "0C25F7CE451D4954986D7a532D71292F"
+      # The target runtime version comes from the workflow input
+      NEW_RUNTIME_VERSION: ${{ github.event.inputs.runtimeImage }}
+
 
     steps:
       - name: Get Anypoint Access Token
@@ -21,26 +36,55 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{
               "grant_type": "client_credentials",
-              "client_id": "f6e58674681a44569abb7b1af1011a9f",
-              "client_secret": "0C25F7CE451D4954986D8a532D71292F"
+              "client_id": "${{ env.CLIENT_ID }}",
+              "client_secret": "${{ env.CLIENT_SECRET }}"
             }' | jq -r '.access_token')
 
           echo "ACCESS_TOKEN=$TOKEN" >> $GITHUB_ENV
 
-      - name: Get Existing Deployment
+      - name: Get Existing Deployment Configuration (CH2 API)
         run: |
-          RESPONSE=$(curl -s -L -X GET \
-            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186")
+          # Use the correct CloudHub 2.0 API endpoint
+          CH2_API_URL="https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ env.APP_NAME }}"
 
-      - name: Update Runtime Image and Redeploy
+          RESPONSE=$(curl -s -L -X GET \
+            "${CH2_API_URL}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "X-ANYPNT-ORG-ID: ${{ env.ORG_ID }}" \
+            -H "X-ANYPNT-ENV-ID: ${{ env.ENV_ID }}")
+
+          echo "$RESPONSE" > deployment.json
+
+          # Determine the correct JSON path for the runtime version (common CH2 path)
+          RUNTIME_VERSION_PATH=".deploymentSettings.runtimeVersion"
+          if [ "$(jq -e "$RUNTIME_VERSION_PATH" deployment.json 2>/dev/null)" = "null" ]; then
+             RUNTIME_VERSION_PATH=".runtimeVersion" # Fallback path
+          fi
+          
+          CURRENT_IMAGE=$(jq -r "$RUNTIME_VERSION_PATH" deployment.json)
+          echo "Current Mule Runtime Image: $CURRENT_IMAGE"
+          echo "RUNTIME_VERSION_PATH=$RUNTIME_VERSION_PATH" >> $GITHUB_ENV
+
+
+      - name: Update Runtime Image and Redeploy (CH2 API)
         run: |
+          CH2_API_URL="https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ env.APP_NAME }}"
+          
+          # Use jq to update the JSON path dynamically
+          # We use the RUNTIME_VERSION_PATH found in the previous step
+          jq --arg new_runtime "${{ env.NEW_RUNTIME_VERSION }}" \
+             --arg path_key "$RUNTIME_VERSION_PATH" \
+             'setpath([$path_key | sub("^\\.";"") | split(".")] ; $new_runtime)' \
+             deployment.json > updated-deployment.json
+
+          echo "--- JSON Payload to be sent to CH2 API ---"
+          cat updated-deployment.json
+          echo "----------------------------------------"
 
           curl -X PUT \
-            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
+            "${CH2_API_URL}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
+            -H "X-ANYPNT-ORG-ID: ${{ env.ORG_ID }}" \
+            -H "X-ANYPNT-ENV-ID: ${{ env.ENV_ID }}" \
             -H "Content-Type: application/json" \
+            --data-binary @updated-deployment.json
