@@ -1,31 +1,23 @@
-name: Update Mule Runtime on CloudHub 2.0 (Hardcoded Values)
+name: Update Mule Runtime on CloudHub 2.0 (Hardcoded Values - Robust)
 
 on:
-  # Allows manual running from the GitHub Actions UI
   workflow_dispatch:
     inputs:
       runtimeImage:
-        description: "Mule runtime image (e.g. 4.6.2)"
+        description: "Mule runtime image (e.g. 4.6.2, mulesoft/mule-runtime:4.6.2)"
         required: true
-      # The appName input is still used here just to avoid changing the token retrieval step,
-      # but all other values are baked in.
-      appName:
-        description: "Application Name (e.g. runtimeautomation)"
-        required: true
-        default: "runtimeautomation" # Example Default
-
+        
 jobs:
   update-runtime:
     runs-on: ubuntu-latest
 
     env:
-      # Hardcoded Values for CloudHub 2.0 Application and Environment
+      # ⚠️ WARNING: Hardcoded credentials. Use GitHub Secrets in production!
       APP_NAME: "runtimeautomation"
       ORG_ID: "438cc9b1-154d-4ca6-864a-4c41c21f3458"
       ENV_ID: "7e607371-34c6-42e9-9e61-3344ed6d1186"
       CLIENT_ID: "f6e58674681a44569abb7b1af1011a9f"
       CLIENT_SECRET: "0C25F7CE451D4954986D7a532D71292F"
-      # The target runtime version comes from the workflow input
       NEW_RUNTIME_VERSION: ${{ github.event.inputs.runtimeImage }}
 
 
@@ -40,11 +32,16 @@ jobs:
               "client_secret": "${{ env.CLIENT_SECRET }}"
             }' | jq -r '.access_token')
 
+          if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
+              echo "::error::Failed to retrieve Anypoint Access Token. Check Client ID/Secret."
+              exit 1
+          fi
+
           echo "ACCESS_TOKEN=$TOKEN" >> $GITHUB_ENV
 
       - name: Get Existing Deployment Configuration (CH2 API)
         run: |
-          # Use the correct CloudHub 2.0 API endpoint
+          # Use the correct CloudHub 2.0 API endpoint (AMC / Application Manager)
           CH2_API_URL="https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ env.APP_NAME }}"
 
           RESPONSE=$(curl -s -L -X GET \
@@ -54,11 +51,24 @@ jobs:
             -H "X-ANYPNT-ENV-ID: ${{ env.ENV_ID }}")
 
           echo "$RESPONSE" > deployment.json
+          
+          # --- 🎯 CRITICAL CHECK FOR jq ERROR ---
+          # Check if the file contains valid JSON. If not, the previous API call failed.
+          if ! jq . deployment.json > /dev/null 2>&1; then
+              echo "::error::API call failed or returned non-JSON data. Check application name, org ID, and environment ID."
+              echo "--- RAW API RESPONSE CONTENT (Error Details) ---"
+              cat deployment.json
+              echo "------------------------------------------------"
+              exit 1
+          fi
+          # ------------------------------------
 
           # Determine the correct JSON path for the runtime version (common CH2 path)
           RUNTIME_VERSION_PATH=".deploymentSettings.runtimeVersion"
-          if [ "$(jq -e "$RUNTIME_VERSION_PATH" deployment.json 2>/dev/null)" = "null" ]; then
-             RUNTIME_VERSION_PATH=".runtimeVersion" # Fallback path
+          
+          # Fallback check, though .deploymentSettings.runtimeVersion is most common
+          if [ "$(jq -r "$RUNTIME_VERSION_PATH" deployment.json)" == "null" ]; then
+             RUNTIME_VERSION_PATH=".runtimeVersion" 
           fi
           
           CURRENT_IMAGE=$(jq -r "$RUNTIME_VERSION_PATH" deployment.json)
@@ -70,8 +80,8 @@ jobs:
         run: |
           CH2_API_URL="https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ env.APP_NAME }}"
           
-          # Use jq to update the JSON path dynamically
-          # We use the RUNTIME_VERSION_PATH found in the previous step
+          # Use jq with --arg to safely pass the runtime version string
+          # The 'setpath' function safely updates nested JSON paths.
           jq --arg new_runtime "${{ env.NEW_RUNTIME_VERSION }}" \
              --arg path_key "$RUNTIME_VERSION_PATH" \
              'setpath([$path_key | sub("^\\.";"") | split(".")] ; $new_runtime)' \
