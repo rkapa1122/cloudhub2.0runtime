@@ -24,7 +24,10 @@ jobs:
               "client_id": "f6e58674681a44569abb7b1af1011a9f",
               "client_secret": "0C25F7CE451D4954986D8a532D71292F"
             }' | jq -r '.access_token')
-          echo "ACCESS_TOKEN=$TOKEN" >> $GITHUB_ENV
+          RUNTIME_PATH=".deploymentSettings.runtimeVersion"
+          CURRENT_VERSION=$(jq -r "$RUNTIME_PATH" deployment.json)
+          echo "Current Mule Runtime Version: $CURRENT_VERSION"
+          echo "RUNTIME_PATH=$RUNTIME_PATH" >> $GITHUB_ENV
       - name: Get Existing Deployment
         run: |
           RESPONSE=$(curl -s -L -X GET \
