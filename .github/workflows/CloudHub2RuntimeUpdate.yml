@@ -1,0 +1,50 @@
+name: Update Mule Runtime on CloudHub 2.0
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtimeImage:
+        description: "Mule runtime image (e.g. mulesoft/mule-runtime:4.6.2)"
+        required: true
+      appName:
+        description: "runtimeautomation"
+        required: true
+
+jobs:
+  update-runtime:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get Anypoint Access Token
+        run: |
+          TOKEN=$(curl -s -X POST https://anypoint.mulesoft.com/accounts/api/v2/oauth2/token \
+            -H "Content-Type: application/json" \
+            -d '{
+              "grant_type": "client_credentials",
+              "client_id": "${{ secrets.ANYPOINT_CLIENT_ID }}",
+              "client_secret": "${{ secrets.ANYPOINT_CLIENT_SECRET }}"
+            }' | jq -r '.access_token')
+
+          echo "ACCESS_TOKEN=$TOKEN" >> $GITHUB_ENV
+
+      - name: Get Existing Deployment
+        run: |
+          curl -s -X GET \
+            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "X-ANYPNT-ORG-ID: ${{ secrets.ANYPOINT_ORG_ID }}" \
+            -H "X-ANYPNT-ENV-ID: ${{ secrets.ANYPOINT_ENV_ID }}" \
+            > deployment.json
+
+      - name: Update Runtime Image and Redeploy
+        run: |
+          jq '.spec.template.spec.containers[0].image = "${{ github.event.inputs.runtimeImage }}"' deployment.json \
+            > updated-deployment.json
+
+          curl -X PUT \
+            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "X-ANYPNT-ORG-ID: ${{ secrets.ANYPOINT_ORG_ID }}" \
+            -H "X-ANYPNT-ENV-ID: ${{ secrets.ANYPOINT_ENV_ID }}" \
+            -H "Content-Type: application/json" \
+            --data @updated-deployment.json
