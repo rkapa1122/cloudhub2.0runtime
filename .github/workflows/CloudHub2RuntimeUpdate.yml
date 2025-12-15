@@ -37,8 +37,6 @@ jobs:
 
       - name: Update Runtime Image and Redeploy
         run: |
-          jq '.spec.template.spec.containers[0].image = "${{ github.event.inputs.runtimeImage }}"' \
-            deployment.json > updated-deployment.json
 
           curl -X PUT \
             "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
