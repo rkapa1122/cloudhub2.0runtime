@@ -24,25 +24,31 @@ jobs:
               "client_id": "f6e58674681a44569abb7b1af1011a9f",
               "client_secret": "0C25F7CE451D4954986D8a532D71292F"
             }' | jq -r '.access_token')
+
           echo "ACCESS_TOKEN=$TOKEN" >> $GITHUB_ENV
+
       - name: Get Existing Deployment
         run: |
-          curl -s -X GET \
+          RESPONSE=$(curl -s -L -X GET \
             "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
-            CURRENT_IMAGE=$(echo "$RESPONSE" | jq -r '.spec.template.spec.containers[0].image')
-            echo "Current Mule Runtime Image: $CURRENT_IMAGE"
-            > deployment.json
+            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186")
+
+          echo "$RESPONSE" > deployment.json
+
+          CURRENT_IMAGE=$(jq -r '.spec.template.spec.containers[0].image' deployment.json)
+          echo "Current Mule Runtime Image: $CURRENT_IMAGE"
+
       - name: Update Runtime Image and Redeploy
         run: |
-          jq '.spec.template.spec.containers[0].image = "${{ github.event.inputs.runtimeImage }}"' deployment.json \
-            > updated-deployment.json
+          jq '.spec.template.spec.containers[0].image = "${{ github.event.inputs.runtimeImage }}"' \
+            deployment.json > updated-deployment.json
+
           curl -X PUT \
             "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
             -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
             -H "Content-Type: application/json" \
-            --data @updated-deployment.json
+            --data-binary @updated-deployment.json
