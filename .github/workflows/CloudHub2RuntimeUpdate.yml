@@ -1,25 +1,18 @@
-name: Update Mule Runtime on CloudHub 2.0 (Hardcoded Values - Robust)
+name: Update Mule Runtime on CloudHub 2.0 (Hardcoded)
 
 on:
   workflow_dispatch:
     inputs:
       runtimeImage:
-        description: "Mule runtime image (e.g. 4.6.2, mulesoft/mule-runtime:4.6.2)"
+        description: "Mule runtime image (e.g. mulesoft/mule-runtime:4.6.2)"
         required: true
-        
+      appName:
+        description: "runtimeautomation"
+        required: true
+
 jobs:
   update-runtime:
     runs-on: ubuntu-latest
-
-    env:
-      # ⚠️ WARNING: Hardcoded credentials. Use GitHub Secrets in production!
-      APP_NAME: "runtimeautomation"
-      ORG_ID: "438cc9b1-154d-4ca6-864a-4c41c21f3458"
-      ENV_ID: "7e607371-34c6-42e9-9e61-3344ed6d1186"
-      CLIENT_ID: "f6e58674681a44569abb7b1af1011a9f"
-      CLIENT_SECRET: "0C25F7CE451D4954986D7a532D71292F"
-      NEW_RUNTIME_VERSION: ${{ github.event.inputs.runtimeImage }}
-
 
     steps:
       - name: Get Anypoint Access Token
@@ -28,73 +21,22 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{
               "grant_type": "client_credentials",
-              "client_id": "${{ env.CLIENT_ID }}",
-              "client_secret": "${{ env.CLIENT_SECRET }}"
+              "client_id": "f6e58674681a44569abb7b1af1011a9f",
+              "client_secret": "0C25F7CE451D4954986D8a532D71292F"
             }' | jq -r '.access_token')
-
-          if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
-              echo "::error::Failed to retrieve Anypoint Access Token. Check Client ID/Secret."
-              exit 1
-          fi
-
           echo "ACCESS_TOKEN=$TOKEN" >> $GITHUB_ENV
-
-      - name: Get Existing Deployment Configuration (CH2 API)
+      - name: Get Existing Deployment
         run: |
-          # Use the correct CloudHub 2.0 API endpoint (AMC / Application Manager)
-          CH2_API_URL="https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ env.APP_NAME }}"
-
           RESPONSE=$(curl -s -L -X GET \
-            "${CH2_API_URL}" \
+            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "X-ANYPNT-ORG-ID: ${{ env.ORG_ID }}" \
-            -H "X-ANYPNT-ENV-ID: ${{ env.ENV_ID }}")
-
-          echo "$RESPONSE" > deployment.json
-          
-          # --- 🎯 CRITICAL CHECK FOR jq ERROR ---
-          # Check if the file contains valid JSON. If not, the previous API call failed.
-          if ! jq . deployment.json > /dev/null 2>&1; then
-              echo "::error::API call failed or returned non-JSON data. Check application name, org ID, and environment ID."
-              echo "--- RAW API RESPONSE CONTENT (Error Details) ---"
-              cat deployment.json
-              echo "------------------------------------------------"
-              exit 1
-          fi
-          # ------------------------------------
-
-          # Determine the correct JSON path for the runtime version (common CH2 path)
-          RUNTIME_VERSION_PATH=".deploymentSettings.runtimeVersion"
-          
-          # Fallback check, though .deploymentSettings.runtimeVersion is most common
-          if [ "$(jq -r "$RUNTIME_VERSION_PATH" deployment.json)" == "null" ]; then
-             RUNTIME_VERSION_PATH=".runtimeVersion" 
-          fi
-          
-          CURRENT_IMAGE=$(jq -r "$RUNTIME_VERSION_PATH" deployment.json)
-          echo "Current Mule Runtime Image: $CURRENT_IMAGE"
-          echo "RUNTIME_VERSION_PATH=$RUNTIME_VERSION_PATH" >> $GITHUB_ENV
-
-
-      - name: Update Runtime Image and Redeploy (CH2 API)
+            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
+            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186")
+      - name: Update Runtime Image and Redeploy
         run: |
-          CH2_API_URL="https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ env.APP_NAME }}"
-          
-          # Use jq with --arg to safely pass the runtime version string
-          # The 'setpath' function safely updates nested JSON paths.
-          jq --arg new_runtime "${{ env.NEW_RUNTIME_VERSION }}" \
-             --arg path_key "$RUNTIME_VERSION_PATH" \
-             'setpath([$path_key | sub("^\\.";"") | split(".")] ; $new_runtime)' \
-             deployment.json > updated-deployment.json
-
-          echo "--- JSON Payload to be sent to CH2 API ---"
-          cat updated-deployment.json
-          echo "----------------------------------------"
-
           curl -X PUT \
-            "${CH2_API_URL}" \
+            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            -H "X-ANYPNT-ORG-ID: ${{ env.ORG_ID }}" \
-            -H "X-ANYPNT-ENV-ID: ${{ env.ENV_ID }}" \
+            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
+            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
             -H "Content-Type: application/json" \
-            --data-binary @updated-deployment.json
