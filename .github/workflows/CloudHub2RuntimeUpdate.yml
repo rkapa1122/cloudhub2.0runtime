@@ -28,14 +28,15 @@ jobs:
       - name: Get Existing Deployment
         run: |
           RESPONSE=$(curl -s -L -X GET \
-            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
+            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ github.event.inputs.appName }}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
             -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186")
+             echo "Current Mule Runtime Version: $CURRENT_VERSION"
       - name: Update Runtime Image and Redeploy
         run: |
           curl -X PUT \
-            "https://anypoint.mulesoft.com/runtime-fabric/api/v1/deployments/${{ github.event.inputs.appName }}" \
+            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ github.event.inputs.appName }}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
             -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
