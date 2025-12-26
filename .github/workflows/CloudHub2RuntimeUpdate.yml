@@ -19,49 +19,44 @@ jobs:
               "client_secret": "0C25F7CE451D4954986D8a532D71292F"
             }' | jq -r '.access_token')
 
-          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
-            echo "Error: Failed to get token. check credentials."
-            exit 1
-          fi
+              if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
+                echo "Error: Failed to get token."
+                exit 1
+              fi
+              
+              # 2. Find the Application ID using the Name
+              # This searches all apps in the environment and grabs the ID for 'runtimeautomation'
+              APP_ID=$(curl -s -X GET "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
+                -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
+                | jq -r '.items[] | select(.name=="runtimeautomation") | .id')
+              
+              if [ -z "$APP_ID" ] || [ "$APP_ID" == "null" ]; then
+                echo "Error: Could not find Application ID for name 'runtimeautomation'."
+                exit 1
+              fi
+              
+              echo "Found Application ID: $APP_ID"
+              
+              # 3. Get the Existing Deployment Configuration
+              curl -s -X GET "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/$APP_ID" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
+                -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" > deployment.json
+              
+              # 4. Update the Runtime Version (to 4.10.1:12e) and Java Version (to 17)
+              # Note: 4.10.x requires Java 17 as shown in your UI screenshot
+              jq '.deploymentSettings.runtimeVersion = "4.10.1:12e" | .deploymentSettings.javaVersion = "17"' deployment.json > updated-deployment.json
+              
+              echo "Updating runtime to 4.10.1:12e with Java 17..."
+              
+              # 5. Push the Update back to CloudHub 2.0
+              curl -X PATCH "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/$APP_ID" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
+                -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
+                -H "Content-Type: application/json" \
+                -d @updated-deployment.json
 
-          # 2. Get the Existing Deployment Configuration
-          # This creates the 'deployment.json' file so that jq doesn't fail.
-          curl -s -L -X GET \
-            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/runtimeautomation" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" > deployment.json
-
-          # Verify if the response is valid JSON
-          if ! jq . deployment.json > /dev/null 2>&1; then
-            echo "Error: API returned invalid JSON. Content below:"
-            cat deployment.json
-            exit 1
-          fi
-
-           # 3. Update the Runtime Version in the JSON file
-           # Using the full tag from the UI and setting Java to 17
-          jq '.deploymentSettings.runtimeVersion = "4.10.1:12e" | .deploymentSettings.javaVersion = "17"' deployment.json > updated-deployment.json
-  
-          echo "Updating runtime to 4.10.1:12e with Java 17..."
-
-           # 4. Push the Update back to CloudHub 2.0
-          # We use the $TOKEN variable and replace the placeholder with 'runtimeautomation'
-          curl -X PATCH "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/runtimeautomation" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-          -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
-          -H "Content-Type: application/json" \
-          -d @updated-deployment.json
-        
-          echo "Deployment update triggered successfully."
-
-          # 4. Push the Update back to CloudHub 2.0
-          curl -X PATCH "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/{YOUR_APP_ID}" \
-          -H "Authorization: Bearer $TOKEN" \
-          -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-          -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
-          -H "Content-Type: application/json" \
-          -d @updated-deployment.json
-
-          echo "Deployment update triggered."
+echo "Deployment update triggered successfully."
