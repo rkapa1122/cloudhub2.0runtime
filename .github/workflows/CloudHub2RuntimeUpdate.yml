@@ -41,7 +41,7 @@ jobs:
 
           # 3. Update the Runtime Version in the JSON file
           # We are hardcoding the version to 4.9.11 here.
-          jq '.deploymentSettings.runtimeVersion = "4.9.11"' deployment.json > updated-deployment.json
+          jq '.deploymentSettings.runtimeVersion = "4.10.1"' deployment.json > updated-deployment.json
 
           echo "Updating runtime to 4.9.11..."
 
