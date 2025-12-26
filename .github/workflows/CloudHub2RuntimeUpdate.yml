@@ -41,17 +41,16 @@ jobs:
 
           # 3. Update the Runtime Version in the JSON file
           # We are hardcoding the version to 4.9.11 here.
-          jq '.deploymentSettings.runtimeVersion = "4.10.1"' deployment.json > updated-deployment.json
+          jq '.deploymentSettings.runtimeVersion = "4.10.1:12e" | .deploymentSettings.javaVersion = "17"' deployment.json > updated-deployment.json
 
           echo "Updating runtime to 4.9.11..."
 
           # 4. Push the Update back to CloudHub 2.0
-          curl -s -X PUT \
-            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/runtimeautomation" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
-            -H "Content-Type: application/json" \
-            --data-binary @updated-deployment.json
+          curl -X PATCH "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/{YOUR_APP_ID}" \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
+          -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
+          -H "Content-Type: application/json" \
+          -d @updated-deployment.json
 
           echo "Deployment update triggered."
