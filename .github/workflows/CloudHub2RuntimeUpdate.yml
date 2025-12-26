@@ -1,22 +1,16 @@
-name: Update Mule Runtime on CloudHub 2.0 (Hardcoded)
+name: Update Mule Runtime on CloudHub 2.0 (FULLY HARDCODED)
 
 on:
-  workflow_dispatch:
-    inputs:
-      runtimeImage:
-        description: "Mule runtime image (e.g. mulesoft/mule-runtime:4.6.2)"
-        required: true
-      appName:
-        description: "runtimeautomation"
-        required: true
+  workflow_dispatch: # Allows you to trigger this manually from the Actions tab
 
 jobs:
   update-runtime:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get Anypoint Access Token
+      - name: Authenticate and Update Runtime
         run: |
+          # 1. Get Anypoint Access Token
           TOKEN=$(curl -s -X POST https://anypoint.mulesoft.com/accounts/api/v2/oauth2/token \
             -H "Content-Type: application/json" \
             -d '{
@@ -24,23 +18,40 @@ jobs:
               "client_id": "f6e58674681a44569abb7b1af1011a9f",
               "client_secret": "0C25F7CE451D4954986D8a532D71292F"
             }' | jq -r '.access_token')
-          RUNTIME_PATH=".deploymentSettings.runtimeVersion"
-          CURRENT_VERSION=$(jq -r "$RUNTIME_PATH" deployment.json)
-          echo "Current Mule Runtime Version: $CURRENT_VERSION"
-          echo "RUNTIME_PATH=$RUNTIME_PATH" >> $GITHUB_ENV
-      - name: Get Existing Deployment
-        run: |
-          RESPONSE=$(curl -s -L -X GET \
-            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ github.event.inputs.appName }}" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
+
+          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
+            echo "Error: Failed to get token. check credentials."
+            exit 1
+          fi
+
+          # 2. Get the Existing Deployment Configuration
+          # This creates the 'deployment.json' file so that jq doesn't fail.
+          curl -s -L -X GET \
+            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/runtimeautomation" \
+            -H "Authorization: Bearer $TOKEN" \
             -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186")
-             echo "Current Mule Runtime Version: $CURRENT_VERSION"
-      - name: Update Runtime Image and Redeploy
-        run: |
-          curl -X PUT \
-            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/${{ github.event.inputs.appName }}" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" > deployment.json
+
+          # Verify if the response is valid JSON
+          if ! jq . deployment.json > /dev/null 2>&1; then
+            echo "Error: API returned invalid JSON. Content below:"
+            cat deployment.json
+            exit 1
+          fi
+
+          # 3. Update the Runtime Version in the JSON file
+          # We are hardcoding the version to 4.9.11 here.
+          jq '.deploymentSettings.runtimeVersion = "4.9.11"' deployment.json > updated-deployment.json
+
+          echo "Updating runtime to 4.9.11..."
+
+          # 4. Push the Update back to CloudHub 2.0
+          curl -s -X PUT \
+            "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/runtimeautomation" \
+            -H "Authorization: Bearer $TOKEN" \
             -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
             -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
             -H "Content-Type: application/json" \
+            --data-binary @updated-deployment.json
+
+          echo "Deployment update triggered."
