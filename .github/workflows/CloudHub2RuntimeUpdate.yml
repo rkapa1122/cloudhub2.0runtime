@@ -21,7 +21,7 @@ env:
   MULE_ENV: ${{ inputs.environment || 'Sandbox' }}
   MULE_TARGET_SPACE: ${{ inputs.target_space || 'Cloudhub-US-East-2' }}
   # The server ID defined in your pom.xml properties
-  MAVEN_SERVER_ID: anypoint-connected-app
+  MAVEN_SERVER_ID: github-actions-ch2-deployer
 
 jobs:
   build-and-deploy:
