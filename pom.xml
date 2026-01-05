@@ -17,7 +17,7 @@
 		<mule.maven.plugin.version>4.3.0</mule.maven.plugin.version>
 		<cloudhub.environment>Sandbox</cloudhub.environment>
     <cloudhub.target>Cloudhub-US-East-2</cloudhub.target>
-    <cloudhub.server.id>anypoint-connected-app</cloudhub.server.id>
+    <cloudhub.server.id>github-actions-ch2-deployer</cloudhub.server.id>
 	</properties>
 
 	<build>
