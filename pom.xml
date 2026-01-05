@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>com.mycompany</groupId>
+	<groupId>438cc9b1-154d-4ca6-864a-4c41c21f3458</groupId>
 	<artifactId>ch2runtimeupdate</artifactId>
 	<version>1.0.0-SNAPSHOT</version>
 	<packaging>mule-application</packaging>
@@ -36,7 +36,7 @@
             <server>${cloudhub.server.id}</server>
             <muleVersion>4.10.1:12e</muleVersion>
             <javaVersion>17</javaVersion>
-            <applicationName>ch2runtimeupdate</applicationName>
+            <applicationName>runtimeautomation</applicationName>
             <replicas>1</replicas>
             <vCores>0.1</vCores>
              <deploymentSettings>
