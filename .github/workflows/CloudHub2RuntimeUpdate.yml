@@ -1,66 +1,67 @@
-name: Update Mule Runtime on CloudHub 2.0 (FULLY HARDCODED)
+name: Deploy to CloudHub 2.0
 
 on:
+  # Trigger deployment on push to the main branch
+  push:
+    branches: [ "main" ]
+  # Allow triggering the workflow manually from the GitHub Actions UI
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'CloudHub Environment (e.g., Sandbox, Production)'
+        required: true
+        default: 'Sandbox'
+      target_space:
+        description: 'Target Private/Shared Space Name (e.g., Cloudhub-US-East-2)'
+        required: true
+        default: 'Cloudhub-US-East-2'
+
+env:
+  # Set default values if triggered via push, otherwise use manual inputs
+  MULE_ENV: ${{ inputs.environment || 'Sandbox' }}
+  MULE_TARGET_SPACE: ${{ inputs.target_space || 'Cloudhub-US-East-2' }}
+  # The server ID defined in your pom.xml properties
+  MAVEN_SERVER_ID: anypoint-connected-app
 
 jobs:
-  update-runtime:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Authenticate and Update Runtime
+      # 1. Checkout the code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Java JDK required for the Maven build
+      # Note: We use Java 11 to run the Maven build itself. 
+      # The runtime Java version (17) is configured in the pom.xml configuration.
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # 3. Generate Maven settings.xml with credentials on the fly
+      # This action creates a temporary settings.xml used only for this run,
+      # injecting the secrets needed for authentication.
+      - name: Configure Maven Settings
+        uses: s4u/maven-settings-action@v3.0.0
+        with:
+          servers: |
+            [{
+                "id": "${{ env.MAVEN_SERVER_ID }}",
+                "username": "${{ secrets.ANYPOINT_CLIENT_ID }}",
+                "password": "${{ secrets.ANYPOINT_CLIENT_SECRET }}"
+            }]
+
+      # 4. Build and Deploy to CloudHub 2.0
+      # We skip tests here for faster deployment, but you should run them in a separate step/job in a real pipeline.
+      # We pass the environment and target variables to override the pom.xml defaults.
+      - name: Deploy to MuleSoft
         run: |
-                        # 1. Get Anypoint Access Token
-                        TOKEN=$(curl -s -X POST https://anypoint.mulesoft.com/accounts/api/v2/oauth2/token \
-                            -H "Content-Type: application/json" \
-                            -d '{
-                              "grant_type": "client_credentials",
-                              "client_id": "f6e58674681a44569abb7b1af1011a9f",
-                              "client_secret": "0C25F7CE451D4954986D8A532D71292F"
-                            }' | jq -r '.access_token')
-                          
-                          # Check if token was actually retrieved
-                          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
-                            echo "Error: Failed to get token. Check your credentials."
-                            exit 1
-                          fi
-                          
-                          # 2. Find application ID by name
-                          # CHANGE: Use Bearer $TOKEN instead of ***
-                          APP_ID=$(curl -s -X GET "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications" \
-                            -H "Authorization: Bearer $TOKEN" \
-                            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-                            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
-                            | jq -r '.items[] | select(.name=="runtimeautomation") | .id')
-                          
-                          if [ -z "$APP_ID" ] || [ "$APP_ID" == "null" ]; then
-                            echo "Error: Application 'runtimeautomation' not found. Verify the name and Environment ID."
-                            exit 1
-                          fi
-                          
-                          echo "Found Application ID: $APP_ID"
-                          
-                          # 3. Fetch existing deployment configuration
-                          # CHANGE: Use Bearer $TOKEN instead of ***
-                          curl -s -X GET "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/$APP_ID" \
-                            -H "Authorization: Bearer $TOKEN" \
-                            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-                            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" > deployment.json
-                          
-                          # 4. Update runtime version & Java version
-                          # Note: 4.10.1:12e REQUIRES Java 17 as shown in your UI screenshot
-                          jq '.deploymentSettings.runtimeVersion = "4.10.1:12e" |
-                              .deploymentSettings.javaVersion = "17"' deployment.json > updated-deployment.json
-                          
-                          echo "Updating runtime to 4.10.1:12e (Java 17)..."
-                          
-                          # 5. Apply the update via PATCH
-                          # CHANGE: Use Bearer $TOKEN instead of ***
-                          curl -X PATCH "https://anypoint.mulesoft.com/amc/application-manager/api/v2/applications/$APP_ID" \
-                            -H "Authorization: Bearer $TOKEN" \
-                            -H "X-ANYPNT-ORG-ID: 438cc9b1-154d-4ca6-864a-4c41c21f3458" \
-                            -H "X-ANYPNT-ENV-ID: 7e607371-34c6-42e9-9e61-3344ed6d1186" \
-                            -H "Content-Type: application/json" \
-                            -d @updated-deployment.json
-                          
-                          echo "Deployment update triggered successfully."
+          mvn clean deploy \
+            -DmuleDeploy \
+            -DskipTests \
+            -Dcloudhub.environment="${{ env.MULE_ENV }}" \
+            -Dcloudhub.target="${{ env.MULE_TARGET_SPACE }}"
