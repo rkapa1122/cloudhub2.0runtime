@@ -36,7 +36,7 @@
             <server>${cloudhub.server.id}</server>
             <muleVersion>4.10.1:12e</muleVersion>
             <javaVersion>17</javaVersion>
-            <applicationName>my-awesome-ch2-app</applicationName>
+            <applicationName>ch2runtimeupdate</applicationName>
             <replicas>1</replicas>
             <vCores>0.1</vCores>
              <deploymentSettings>
