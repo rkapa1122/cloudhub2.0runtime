@@ -15,10 +15,36 @@
 
 		<app.runtime>4.9.7</app.runtime>
 		<mule.maven.plugin.version>4.3.0</mule.maven.plugin.version>
+		<cloudhub.environment>Sandbox</cloudhub.environment>
+    <cloudhub.target>Cloudhub-US-East-2</cloudhub.target>
+    <cloudhub.server.id>anypoint-connected-app</cloudhub.server.id>
 	</properties>
 
 	<build>
 		<plugins>
+			<plugin>
+    <groupId>org.mule.tools.maven</groupId>
+    <artifactId>mule-maven-plugin</artifactId>
+    <version>4.3.0</version>
+    <extensions>true</extensions>
+    <configuration>
+        <cloudhub2Deployment>
+            <uri>https://anypoint.mulesoft.com</uri>
+            <provider>MC</provider>
+            <environment>${cloudhub.environment}</environment>
+            <target>${cloudhub.target}</target>
+            <server>${cloudhub.server.id}</server>
+            <muleVersion>4.10.1:12e</muleVersion>
+            <javaVersion>17</javaVersion>
+            <applicationName>my-awesome-ch2-app</applicationName>
+            <replicas>1</replicas>
+            <vCores>0.1</vCores>
+             <deploymentSettings>
+                <generateDefaultPublicUrl>true</generateDefaultPublicUrl>
+            </deploymentSettings>
+        </cloudhub2Deployment>
+    </configuration>
+</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-clean-plugin</artifactId>
